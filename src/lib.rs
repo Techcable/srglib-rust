@@ -1,4 +1,5 @@
 extern crate indexmap;
+extern crate difference;
 
 pub mod types;
 pub mod descriptor;

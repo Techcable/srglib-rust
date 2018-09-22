@@ -43,10 +43,12 @@ pub trait MappingsFormat {
     }
     fn write<'a, T: IterableMappings<'a>, W: Write>(mappings: &'a T, writer: W) -> io::Result<()>;
     fn write_line_array<'a, T: IterableMappings<'a>>(mappings: &'a T) -> Vec<String> {
+        Self::write_string(mappings).lines().map(String::from).collect()
+    }
+    fn write_string<'a, T: IterableMappings<'a>>(mappings: &'a T) -> String {
         let mut buffer = Vec::new();
         Self::write(mappings, &mut buffer).unwrap();
         String::from_utf8(buffer).unwrap()
-            .lines().map(String::from).collect()
     }
     fn processor() -> Self::Processor;
 }

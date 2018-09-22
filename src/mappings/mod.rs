@@ -15,14 +15,15 @@ pub use self::frozen::FrozenMappings;
 macro_rules! chain {
     () => (FrozenMappings::empty());
     ($target:expr) => ($target.frozen());
-    ($first:expr, $second:expr) => ($first.frozen().chain($second));
-    ($first:expr, $($remaining:expr),*) => {
-        $first.chain($remaining.chain())
-    };
+    ($first:expr, $($remaining:expr),*) => {{
+        let mut chained = $first.frozen();
+        $(chained = chained.chain($remaining);)*
+        chained
+    }};
 }
 
 /// A mapping from one set of source names to another
-pub trait Mappings: Default {
+pub trait Mappings: Default + ::std::fmt::Debug {
     /// Get the remapped class name
     fn get_remapped_class(&self, original: &ReferenceType) -> Option<&ReferenceType>;
     #[inline]

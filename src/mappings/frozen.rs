@@ -1,12 +1,14 @@
 use std::sync::Arc;
 use std::borrow::Cow;
+use std::fmt::{self, Debug};
 
 use indexmap::{map, IndexMap};
 use lazy_static::*;
+use difference::Changeset;
 
 use crate::prelude::*;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct FrozenMappings {
     primary: Arc<FrozenMappingsInner>,
     inverted: Arc<FrozenMappingsInner>
@@ -14,6 +16,15 @@ pub struct FrozenMappings {
 impl PartialEq for FrozenMappings {
     fn eq(&self, other: &FrozenMappings) -> bool {
         self.primary == other.primary
+    }
+}
+impl Debug for FrozenMappings {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("FrozenMappings")
+            .field("classes", &self.primary.classes)
+            .field("fields", &self.primary.fields)
+            .field("methods", &self.primary.methods)
+            .finish()
     }
 }
 #[derive(Debug, PartialEq,)]
@@ -139,7 +150,7 @@ impl FrozenMappings {
         // Now run all our current chain through the mapping to get our new result
         for (original, renamed) in self.classes() {
             let renamed = mapping.get_remapped_class(renamed)
-                .unwrap_or_else(|| original).clone();
+                .unwrap_or_else(|| renamed).clone();
             classes.insert(original.clone(), renamed);
         }
         for (original, renamed) in self.fields() {
@@ -151,6 +162,22 @@ impl FrozenMappings {
             methods.insert(original.clone(), renamed);
         }
         FrozenMappings::new_raw(classes, fields, methods)
+    }
+    #[doc(hidden)]
+    pub fn srg_difference(&self, other: &FrozenMappings) -> Changeset {
+        let mut lines = SrgMappingsFormat::write_line_array(self);
+        lines.sort();
+        let mut other_lines = SrgMappingsFormat::write_line_array(other);
+        other_lines.sort();
+        let text = lines.join("\n");
+        let other_text = other_lines.join("\n");
+        Changeset::new(&text, &other_text, "\n")
+    }
+    #[doc(hidden)]
+    pub fn assert_equal(&self, other: &FrozenMappings) {
+        if self != other {
+            panic!("Expected self = other, diff {}", self.srg_difference(other))
+        }
     }
 }
 impl Mappings for FrozenMappings {
