@@ -46,6 +46,9 @@ pub trait MappingsFormat {
         }
         processer.finish()
     }
+    fn parse_text(text: &str) -> Result<FrozenMappings, MappingsParseError> {
+        Self::parse_lines(text.lines())
+    }
     fn write<'a, T: IterableMappings<'a>, W: Write>(mappings: &'a T, writer: W) -> io::Result<()>;
     fn write_line_array<'a, T: IterableMappings<'a>>(mappings: &'a T) -> Vec<String> {
         Self::write_string(mappings).lines().map(String::from).collect()
