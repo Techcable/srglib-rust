@@ -1,13 +1,18 @@
 use std::io::{self, BufRead, Write};
 
+use failure_derive::Fail;
+
 use crate::prelude::*;
 
 pub mod srg;
 pub mod csrg;
 
-#[derive(Debug)]
+#[derive(Debug, Fail)]
 pub enum MappingsParseError {
-    Io(io::Error),
+    #[fail(display = "{}", _0)]
+    Io(#[cause] io::Error),
+    // TODO: Somehow include reason
+    #[fail(display = "Invalid line at {}: {:?}", index, line)]
     InvalidLine {
         line: String,
         index: usize,
