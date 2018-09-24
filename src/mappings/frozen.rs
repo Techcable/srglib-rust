@@ -113,7 +113,7 @@ impl FrozenMappings {
     }
     /// Chain the specified mappings onto this one,
     /// using the renamed result of each mapping as the original for the next
-    pub fn chain<T: for<'a> IterableMappings<'a> >(&mut self, mapping: T) -> FrozenMappings {
+    pub fn chain<T: for<'a> IterableMappings<'a> >(&self, mapping: T) -> FrozenMappings {
         let mut classes = IndexMap::new();
         let mut fields = IndexMap::new();
         let mut methods = IndexMap::new();
