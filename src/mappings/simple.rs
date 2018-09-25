@@ -7,9 +7,9 @@ use crate::prelude::*;
 
 #[derive(Clone, Debug, Default)]
 pub struct SimpleMappings {
-    classes: IndexMap<ReferenceType, ReferenceType>,
-    method_names: IndexMap<MethodData, String>,
-    field_names: IndexMap<FieldData, String>
+    pub(super) classes: IndexMap<ReferenceType, ReferenceType>,
+    pub(super) method_names: IndexMap<MethodData, String>,
+    pub(super) field_names: IndexMap<FieldData, String>
 }
 impl Mappings for SimpleMappings {
     #[inline]
@@ -55,6 +55,21 @@ impl MutableMappings for SimpleMappings {
     #[inline]
     fn set_field_name(&mut self, original: FieldData, renamed: String) {
         self.field_names.insert(original, renamed);
+    }
+
+    #[inline]
+    fn retain_classes<F: FnMut(&ReferenceType, &ReferenceType) -> bool>(&mut self, mut func: F) {
+        self.classes.retain(|key, value| func(key, value));
+    }
+
+    #[inline]
+    fn retain_fields<F: FnMut(&FieldData, &str) -> bool>(&mut self, mut func: F) {
+        self.field_names.retain(|key, value| func(key, &**value));
+    }
+
+    #[inline]
+    fn retain_methods<F: FnMut(&MethodData, &str) -> bool>(&mut self, mut func: F) {
+        self.method_names.retain(|key, value| func(key, &**value));
     }
 }
 impl<'a> IterableMappings<'a> for SimpleMappings {

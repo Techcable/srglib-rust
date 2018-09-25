@@ -71,6 +71,9 @@ pub trait MutableMappings: Mappings {
     fn set_remapped_class(&mut self, original: ReferenceType, renamed: ReferenceType);
     fn set_method_name(&mut self, original: MethodData, renamed: String);
     fn set_field_name(&mut self, original: FieldData, renamed: String);
+    fn retain_classes<F: FnMut(&ReferenceType, &ReferenceType) -> bool>(&mut self, func: F);
+    fn retain_fields<F: FnMut(&FieldData, &str) -> bool>(&mut self, func: F);
+    fn retain_methods<F: FnMut(&MethodData, &str) -> bool>(&mut self, func: F);
 }
 pub trait IterableMappings<'a>: Mappings {
     type FieldValue: Borrow<FieldData> + Into<FieldData>;
