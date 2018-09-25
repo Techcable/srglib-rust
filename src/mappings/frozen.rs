@@ -179,6 +179,19 @@ impl FrozenMappings {
             panic!("Expected self = other, diff {}", self.srg_difference(other))
         }
     }
+    pub fn rebuild(&self) -> SimpleMappings {
+        SimpleMappings {
+            classes: self.classes()
+                .map(|(first, second)| (first.clone(), second.clone()))
+                .collect(),
+            field_names: self.fields()
+                .map(|(first, second)| (first.clone(), second.name.clone()))
+                .collect(),
+            method_names: self.methods()
+                .map(|(first, second)| (first.clone(), second.name.clone()))
+                .collect()
+        }
+    }
 }
 impl Mappings for FrozenMappings {
     #[inline]
