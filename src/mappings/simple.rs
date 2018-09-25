@@ -71,6 +71,21 @@ impl MutableMappings for SimpleMappings {
     fn retain_methods<F: FnMut(&MethodData, &str) -> bool>(&mut self, mut func: F) {
         self.method_names.retain(|key, value| func(key, &**value));
     }
+
+    #[inline]
+    fn clear_classes(&mut self) {
+        self.classes.clear();
+    }
+
+    #[inline]
+    fn clear_fields(&mut self) {
+        self.field_names.clear();
+    }
+
+    #[inline]
+    fn clear_methods(&mut self) {
+        self.method_names.clear();
+    }
 }
 impl<'a> IterableMappings<'a> for SimpleMappings {
     type FieldValue = FieldData;

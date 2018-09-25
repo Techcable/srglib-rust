@@ -74,6 +74,9 @@ pub trait MutableMappings: Mappings {
     fn retain_classes<F: FnMut(&ReferenceType, &ReferenceType) -> bool>(&mut self, func: F);
     fn retain_fields<F: FnMut(&FieldData, &str) -> bool>(&mut self, func: F);
     fn retain_methods<F: FnMut(&MethodData, &str) -> bool>(&mut self, func: F);
+    fn clear_classes(&mut self);
+    fn clear_fields(&mut self);
+    fn clear_methods(&mut self);
 }
 pub trait IterableMappings<'a>: Mappings {
     type FieldValue: Borrow<FieldData> + Into<FieldData>;
