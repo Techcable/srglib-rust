@@ -34,7 +34,7 @@ pub trait MappingsFormat {
         loop {
             buffer.clear();
             if read.read_line(&mut buffer)? == 0 { break }
-            processer.process_line(&buffer)?;
+            processer.process_line(buffer.trim_right_matches('\n'))?;
         }
         processer.finish()
     }
