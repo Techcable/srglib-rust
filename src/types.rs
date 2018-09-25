@@ -245,7 +245,7 @@ impl ArrayType {
         let mut descriptor = String::with_capacity(
             dimensions * 2 + element_type.descriptor().len());
         for _ in 0..dimensions {
-            descriptor.push_str("[]");
+            descriptor.push_str("[");
         }
         descriptor.push_str(element_type.descriptor());
         ArrayType(Arc::new(ArrayTypeInner { descriptor, dimensions, element_type }))
