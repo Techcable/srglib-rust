@@ -1,3 +1,4 @@
+use std::ptr;
 use std::sync::Arc;
 use std::borrow::Cow;
 use std::fmt::{self, Debug};
@@ -5,50 +6,70 @@ use std::fmt::{self, Debug};
 use indexmap::{map};
 use lazy_static::*;
 use difference::Changeset;
+use owning_ref::ArcRef;
+use lazycell::AtomicLazyCell;
 
 use crate::utils::FnvIndexMap;
 use crate::prelude::*;
 
+
 #[derive(Clone)]
-pub struct FrozenMappings {
-    primary: Arc<FrozenMappingsInner>,
-    inverted: Arc<FrozenMappingsInner>
+pub struct FrozenMappings(ArcRef<FrozenMappingsBox, FrozenMappingsInner>);
+struct FrozenMappingsBox {
+    primary: FrozenMappingsInner,
+    inverted: AtomicLazyCell<FrozenMappingsInner>
+}
+impl FrozenMappingsBox {
+    fn inverted(&self) -> &FrozenMappingsInner {
+        match self.inverted.borrow() {
+            Some(inverted) => inverted,
+            None => {
+                // We don't care if we're the ones who fill it or if someone else already has
+                drop(self.inverted.fill(self.primary.inverted()));
+                self.inverted.borrow().unwrap()
+            }
+        }
+    }
 }
 impl PartialEq for FrozenMappings {
     fn eq(&self, other: &FrozenMappings) -> bool {
-        self.primary == other.primary
+        self.0 == other.0
     }
 }
 impl Debug for FrozenMappings {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("FrozenMappings")
-            .field("classes", &self.primary.classes)
-            .field("fields", &self.primary.fields)
-            .field("methods", &self.primary.methods)
+            .field("classes", &self.0.classes)
+            .field("fields", &self.0.fields)
+            .field("methods", &self.0.methods)
             .finish()
     }
 }
-#[derive(Debug, PartialEq,)]
+#[derive(Debug, PartialEq)]
 struct FrozenMappingsInner {
     classes: FnvIndexMap<ReferenceType, ReferenceType>,
     methods: FnvIndexMap<MethodData, MethodData>,
     fields: FnvIndexMap<FieldData, FieldData>
 }
 impl FrozenMappingsInner {
-    #[inline]
-    fn empty() -> Self {
+    fn inverted(&self) -> Self {
         FrozenMappingsInner {
-            classes: FnvIndexMap::default(),
-            methods: FnvIndexMap::default(),
-            fields: FnvIndexMap::default(),
+            classes: self.classes.iter()
+                .map(|(original, revised)| (revised.clone(), original.clone()))
+                .collect(),
+            methods: self.methods.iter()
+                .map(|(original, revised)| (revised.clone(), original.clone()))
+                .collect(),
+            fields: self.fields.iter()
+                .map(|(original, revised)| (revised.clone(), original.clone()))
+                .collect(),
         }
     }
 }
 lazy_static! {
-    static ref EMPTY_MAPPINGS: FrozenMappings = FrozenMappings {
-        primary: Arc::new(FrozenMappingsInner::empty()),
-        inverted: Arc::new(FrozenMappingsInner::empty())
-    };
+    static ref EMPTY_MAPPINGS: FrozenMappings = FrozenMappings::new_raw(
+        Default::default(), Default::default(), Default::default()
+    );
 }
 impl Default for FrozenMappings {
     #[inline]
@@ -99,18 +120,10 @@ impl FrozenMappings {
         methods: FnvIndexMap<MethodData, MethodData>
     ) -> FrozenMappings {
         let primary = FrozenMappingsInner { classes, fields, methods };
-        let inverted = FrozenMappingsInner {
-            classes: primary.classes.iter()
-                .map(|(original, revised)| (revised.clone(), original.clone()))
-                .collect(),
-            methods: primary.methods.iter()
-                .map(|(original, revised)| (revised.clone(), original.clone()))
-                .collect(),
-            fields: primary.fields.iter()
-                .map(|(original, revised)| (revised.clone(), original.clone()))
-                .collect(),
-        };
-        FrozenMappings { primary: Arc::new(primary), inverted: Arc::new(inverted) }
+        let boxed = Arc::new(FrozenMappingsBox {
+            primary, inverted: AtomicLazyCell::NONE
+        });
+        FrozenMappings(ArcRef::new(boxed).map(|boxed| &boxed.primary))
     }
     /// Chain the specified mappings onto this one,
     /// using the renamed result of each mapping as the original for the next
@@ -197,17 +210,17 @@ impl FrozenMappings {
 impl Mappings for FrozenMappings {
     #[inline]
     fn get_remapped_class(&self, original: &ReferenceType) -> Option<&ReferenceType> {
-        self.primary.classes.get(original)
+        self.0.classes.get(original)
     }
 
     #[inline]
     fn get_remapped_field(&self, original: &FieldData) -> Option<Cow<FieldData>> {
-        self.primary.fields.get(original).map(Cow::Borrowed)
+        self.0.fields.get(original).map(Cow::Borrowed)
     }
 
     #[inline]
     fn get_remapped_method(&self, original: &MethodData) -> Option<Cow<MethodData>> {
-        self.primary.methods.get(original).map(Cow::Borrowed)
+        self.0.methods.get(original).map(Cow::Borrowed)
     }
 
     #[inline]
@@ -215,12 +228,21 @@ impl Mappings for FrozenMappings {
         self.clone()
     }
 
-    #[inline]
     fn inverted(&self) -> FrozenMappings {
-        FrozenMappings {
-            primary: self.inverted.clone(),
-            inverted: self.primary.clone()
-        }
+        let owner = self.0.as_owner();
+        let value = self.0.as_ref();
+        let new_ref = ArcRef::new(owner.clone());
+        FrozenMappings(if ptr::eq(&owner.primary, value) {
+            new_ref.map(|owner| owner.inverted())
+        } else if owner.inverted.borrow().map_or(
+            false,
+            |inverted| ptr::eq(inverted, value)
+        ) {
+            new_ref.map(|owner| &owner.primary)
+        } else {
+            // The only references we can create are for inverted and primary
+            unreachable!()
+        })
     }
 }
 impl<'a> IterableMappings<'a> for FrozenMappings {
@@ -236,31 +258,31 @@ impl<'a> IterableMappings<'a> for FrozenMappings {
 
     #[inline]
     fn original_classes(&'a self) -> <Self as IterableMappings<'a>>::OriginalClasses {
-        self.primary.classes.keys()
+        self.0.classes.keys()
     }
 
     #[inline]
     fn original_fields(&'a self) -> <Self as IterableMappings<'a>>::OriginalFields {
-        self.primary.fields.keys()
+        self.0.fields.keys()
     }
 
     #[inline]
     fn original_methods(&'a self) -> <Self as IterableMappings<'a>>::OriginalMethods {
-        self.primary.methods.keys()
+        self.0.methods.keys()
     }
 
     #[inline]
     fn classes(&'a self) -> Self::Classes {
-        self.primary.classes.iter()
+        self.0.classes.iter()
     }
 
     #[inline]
     fn fields(&'a self) -> Self::Fields {
-        self.primary.fields.iter()
+        self.0.fields.iter()
     }
 
     #[inline]
     fn methods(&'a self) -> Self::Methods {
-        self.primary.methods.iter()
+        self.0.methods.iter()
     }
 }
