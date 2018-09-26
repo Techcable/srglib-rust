@@ -1,4 +1,7 @@
 use std::borrow::Borrow;
+use std::hash::BuildHasher;
+
+use indexmap::IndexMap;
 
 use crate::prelude::*;
 
@@ -17,8 +20,46 @@ pub fn transform<'a, M: IterableMappings<'a>, T: MappingsTransformer>(mappings: 
             .map(|(original, renamed)| (original.clone(), transformer.rename_method(renamed.borrow()).unwrap_or_else(|| renamed.borrow().name.clone()))),
     )
 }
+pub trait MapClass: Clone {
+    #[inline]
+    fn map_class<F: Fn(&ReferenceType) -> Option<ReferenceType>>(&self, func: F) ->Self {
+        self.transform_class(FuncTypeTransformer(func))
+    }
+    #[inline]
+    fn maybe_map_class<F: Fn(&ReferenceType) -> Option<ReferenceType>>(&self, func: F) -> Option<Self> {
+        self.maybe_transform_class(FuncTypeTransformer(func))
+    }
+    #[inline]
+    fn transform_class<T: TypeTransformer>(&self, transformer: T) -> Self {
+        self.maybe_transform_class(transformer).unwrap_or_else(|| self.clone())
+    }
+    fn maybe_transform_class<T: TypeTransformer>(&self, transformer: T) -> Option<Self>;
+}
+pub trait TypeTransformer {
+    fn maybe_remap_class(&self, original: &ReferenceType) -> Option<ReferenceType>;
+    #[doc(hidden)] // This is just a performance hack for caching signatures
+    fn remap_signature(&self, original: &MethodSignature) -> MethodSignature {
+        original.raw_transform_class(self)
+    }
+}
+impl<S: BuildHasher> TypeTransformer for IndexMap<ReferenceType, ReferenceType, S> {
+    #[inline]
+    fn maybe_remap_class(&self, original: &ReferenceType) -> Option<ReferenceType> {
+        self.get(original).cloned()
+    }
+}
+impl<'a, T: ?Sized + TypeTransformer> TypeTransformer for &'a T {
+    #[inline]
+    fn maybe_remap_class(&self, original: &ReferenceType) -> Option<ReferenceType> {
+        (**self).maybe_remap_class(original)
+    }
+    #[inline]
+    fn remap_signature(&self, original: &MethodSignature) -> MethodSignature {
+        (**self).remap_signature(original)
+    }
+}
 
-// TODO: Should this all become a special-case for `Mapping`?
+#[doc(hidden)] // Shouldn't be publicly expose
 pub trait MappingsTransformer {
     fn transform_class(&self, original: &ReferenceType) -> Option<ReferenceType>;
     #[inline]
@@ -80,8 +121,8 @@ impl<T: Mappings> MappingsTransformer for T {
         self.get_remapped_method(original).map(|t| t.name.clone())
     }
 }
-pub struct TypeTransformer<F: Fn(&ReferenceType) -> Option<ReferenceType>>(pub F);
-impl<F: Fn(&ReferenceType) -> Option<ReferenceType>> MappingsTransformer for TypeTransformer<F> {
+pub struct FuncTypeTransformer<F: Fn(&ReferenceType) -> Option<ReferenceType>>(pub F);
+impl<F: Fn(&ReferenceType) -> Option<ReferenceType>> MappingsTransformer for FuncTypeTransformer<F> {
     #[inline]
     fn transform_class(&self, original: &ReferenceType) -> Option<ReferenceType> {
         self.0(original)
@@ -95,6 +136,12 @@ impl<F: Fn(&ReferenceType) -> Option<ReferenceType>> MappingsTransformer for Typ
     #[inline]
     fn rename_method(&self, _original: &MethodData) -> Option<String> {
         None
+    }
+}
+impl<F: Fn(&ReferenceType) -> Option<ReferenceType>> TypeTransformer for FuncTypeTransformer<F> {
+    #[inline]
+    fn maybe_remap_class(&self, original: &ReferenceType) -> Option<ReferenceType> {
+        self.0(original)
     }
 }
 pub struct FieldRenamer<F: Fn(&FieldData) -> Option<String>>(pub F);

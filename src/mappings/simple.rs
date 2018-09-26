@@ -32,7 +32,7 @@ impl Mappings for SimpleMappings {
     fn get_remapped_method(&self, original: &MethodData) -> Option<Cow<MethodData>> {
         self.method_names.get(original).map(|name| {
             let mut data = original
-                .map_class(|t| self.get_remapped_class(t).cloned());
+                .transform_class(&*self);
             data.name = name.clone();
             Cow::Owned(data)
         })
@@ -134,6 +134,12 @@ impl<'a> IterableMappings<'a> for SimpleMappings {
         }
     }
 }
+impl TypeTransformer for SimpleMappings {
+    #[inline]
+    fn maybe_remap_class(&self, original: &ReferenceType) -> Option<ReferenceType> {
+        self.get_remapped_class(original).cloned()
+    }
+}
 pub struct Fields<'a> {
     mappings: &'a SimpleMappings,
     iter: map::Iter<'a, FieldData, String>
@@ -144,7 +150,7 @@ impl<'a> Iterator for Fields<'a> {
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         Iterator::next(&mut self.iter).map(|(original, renamed)| {
-            let mut data = original.map_class(|t| self.mappings.get_remapped_class(t).cloned());
+            let mut data = original.transform_class(self.mappings);
             data.name = renamed.clone();
             (original, data)
         })
@@ -170,7 +176,7 @@ impl<'a> Iterator for Methods<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         Iterator::next(&mut self.iter).map(|(original, renamed)| {
             let mut data = original
-                .map_class(|t| self.mappings.get_remapped_class(t).cloned());
+                .transform_class(self.mappings);
             data.name = renamed.clone();
             (original, data)
         })

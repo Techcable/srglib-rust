@@ -9,7 +9,7 @@ use difference::Changeset;
 use owning_ref::ArcRef;
 use lazycell::AtomicLazyCell;
 
-use crate::utils::FnvIndexMap;
+use crate::utils::{FnvIndexMap};
 use crate::prelude::*;
 
 
@@ -97,16 +97,13 @@ impl FrozenMappings {
               F: IntoIterator<Item=(FieldData, String)>,
               M: IntoIterator<Item=(MethodData, String)> {
         let classes: FnvIndexMap<ReferenceType, ReferenceType> = classes.into_iter().collect();
-        let remap_func = |original: &ReferenceType| {
-            classes.get(original).cloned()
-        };
         let fields = fields.into_iter().map(|(first, name): (FieldData, String)| {
-            let mut second = first.map_class(remap_func);
+            let mut second = first.transform_class(&classes);
             second.name = name.clone();
             (first, second)
         }).collect();
         let methods = methods.into_iter().map(|(first, name): (MethodData, String)| {
-            let mut second = first.map_class(remap_func);
+            let mut second = first.transform_class(&classes);
             second.name = name.clone();
             (first, second)
         }).collect();
@@ -148,7 +145,7 @@ impl FrozenMappings {
                  * if we've ever seen this class before
                  */
                 fields.insert(
-                    original.map_class(|t| inverted.get_remapped_class(t).cloned()),
+                    original.transform_class(&inverted),
                     renamed.into()
                 );
             }
@@ -156,7 +153,7 @@ impl FrozenMappings {
         for (original, renamed) in mapping.methods() {
             if inverted.get_remapped_method(original).is_none() {
                 methods.insert(
-                    original.map_class(|t| inverted.get_remapped_class(t).cloned()),
+                    original.transform_class(&inverted),
                     renamed.into()
                 );
             }
@@ -243,6 +240,11 @@ impl Mappings for FrozenMappings {
             // The only references we can create are for inverted and primary
             unreachable!()
         })
+    }
+}
+impl TypeTransformer for FrozenMappings {
+    fn maybe_remap_class(&self, original: &ReferenceType) -> Option<ReferenceType> {
+        self.get_remapped_class(original).cloned()
     }
 }
 impl<'a> IterableMappings<'a> for FrozenMappings {

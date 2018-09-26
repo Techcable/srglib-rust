@@ -30,16 +30,16 @@ impl MethodData {
     pub fn signature(&self) -> &MethodSignature {
         &self.signature
     }
-
-    pub fn map_class<F>(&self, mut func: F) -> MethodData
-        where F: FnMut(&ReferenceType) -> Option<ReferenceType> {
-        let remapped_class = self.declaring_type.map_class(|t| func(t));
-        let remapped_signature = self.signature.map_class(|t| func(t));
-        MethodData {
+}
+impl MapClass for MethodData {
+    fn maybe_transform_class<T: TypeTransformer>(&self, transformer: T) -> Option<Self> {
+        let remapped_class = self.declaring_type.transform_class(&transformer);
+        let remapped_signature = self.signature.transform_class(&transformer);
+        Some(MethodData {
             name: self.name.clone(),
             declaring_type: remapped_class,
             signature: remapped_signature
-        }
+        })
     }
 }
 
@@ -75,12 +75,13 @@ impl FieldData {
         buffer.push_str(&self.name);
         buffer
     }
-    pub fn map_class<F>(&self, func: F) -> FieldData
-        where F: FnMut(&ReferenceType) -> Option<ReferenceType> {
-        let remapped_class = self.declaring_type.map_class(func);
-        FieldData {
-            name: self.name.clone(),
-            declaring_type: remapped_class
+}
+impl MapClass for FieldData {
+    fn maybe_transform_class<T: TypeTransformer>(&self, transformer: T) -> Option<Self> {
+        if let Some(reference_type) = transformer.maybe_remap_class(&self.declaring_type) {
+            Some(FieldData { name: self.name.clone(), declaring_type: reference_type })
+        } else {
+            None
         }
     }
 }
@@ -134,13 +135,18 @@ impl MethodSignature {
     pub fn parameter_types(&self) -> &[TypeDescriptor] {
         &self.0.parameter_types
     }
-    pub fn map_class<F>(&self, mut func: F) -> MethodSignature
-        where F: FnMut(&ReferenceType) -> Option<ReferenceType> {
+    pub(crate) fn raw_transform_class<T: TypeTransformer>(&self, transformer: T) -> MethodSignature {
         MethodSignature::new(
-            self.0.return_type.map_class(|c| func(c)),
-            self.0.parameter_types.iter()
-                .map(|t| t.map_class(|c| func(c))).collect()
+            self.return_type().transform_class(&transformer),
+            self.parameter_types().iter()
+                .map(|t| t.transform_class(&transformer)).collect()
         )
+    }
+}
+impl MapClass for MethodSignature {
+    #[inline]
+    fn maybe_transform_class<T: TypeTransformer>(&self, transformer: T) -> Option<Self> {
+        Some(transformer.remap_signature(self))
     }
 }
 impl SimpleParse for MethodSignature {

@@ -5,6 +5,7 @@ use std::hash::{Hash, Hasher};
 use indexmap::Equivalent;
 use lazy_static::lazy_static;
 
+use crate::prelude::{TypeTransformer, MapClass};
 use crate::utils::*;
 
 macro_rules! descriptor_hash {
@@ -28,7 +29,7 @@ macro_rules! descriptor_hash {
     }
 }
 
-pub trait JavaType<'a>: Clone + Equivalent<TypeDescriptor> {
+pub trait JavaType<'a>: Clone + Equivalent<TypeDescriptor> + MapClass {
     type Name: Into<String> + AsRef<str> + 'a;
     type InternalName: Into<String> + AsRef<str> + 'a;
     fn parse_descriptor(s: &str) -> Option<Self>;
@@ -37,16 +38,6 @@ pub trait JavaType<'a>: Clone + Equivalent<TypeDescriptor> {
     fn internal_name(&'a self) -> Self::InternalName;
     // Casting
     fn into_type_descriptor(self) -> TypeDescriptor;
-    // Operations
-    /// Apply the specified mapping to this type, based on its class name.
-    ///
-    /// If type is an array, it remaps the innermost element type.
-    /// If the type is a class, it invokes the specified function
-    /// If the type is a primitive, it returns the same element type.
-    fn map_class<F: FnMut(&ReferenceType) -> Option<ReferenceType>>(&self, func: F) -> Self {
-        self.maybe_map_class(func).unwrap_or_else(|| self.clone())
-    }
-    fn maybe_map_class<F: FnMut(&ReferenceType) -> Option<ReferenceType>>(&self, func: F) -> Option<Self>;
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
@@ -126,8 +117,10 @@ impl<'a> JavaType<'a> for PrimitiveType {
     fn into_type_descriptor(self) -> TypeDescriptor {
         PRIMITIVE_DESCRIPTOR_TABLE[self as usize].clone()
     }
+}
+impl MapClass for PrimitiveType {
     #[inline]
-    fn maybe_map_class<F: FnMut(&ReferenceType) -> Option<ReferenceType>>(&self, _func: F) -> Option<Self> {
+    fn maybe_transform_class<T: TypeTransformer>(&self, _transformer: T) -> Option<Self> {
         None
     }
 }
@@ -173,6 +166,15 @@ impl SimpleParse for TypeDescriptor {
         })
     }
 }
+impl MapClass for TypeDescriptor {
+    fn maybe_transform_class<T: TypeTransformer>(&self, transformer: T) -> Option<Self> {
+        Some(match *self {
+            TypeDescriptor::Primitive(ref prim) => prim.maybe_transform_class(transformer)?.into_type_descriptor(),
+            TypeDescriptor::Reference(ref obj) => obj.maybe_transform_class(transformer)?.into_type_descriptor(),
+            TypeDescriptor::Array(ref array) => array.maybe_transform_class(transformer)?.into_type_descriptor(),
+        })
+    }
+}
 // NOTE: Must use descriptor_hash so Borrow and hashmap will work correctly
 descriptor_hash!(TypeDescriptor, equals = false);
 impl<'a> JavaType<'a> for TypeDescriptor {
@@ -212,13 +214,6 @@ impl<'a> JavaType<'a> for TypeDescriptor {
     #[inline]
     fn into_type_descriptor(self) -> TypeDescriptor {
         self
-    }
-    fn maybe_map_class<F: FnMut(&ReferenceType) -> Option<ReferenceType>>(&self, func: F) -> Option<Self> {
-        Some(match self {
-            TypeDescriptor::Primitive(prim) => prim.maybe_map_class(func)?.into_type_descriptor(),
-            TypeDescriptor::Reference(obj) => obj.maybe_map_class(func)?.into_type_descriptor(),
-            TypeDescriptor::Array(array) => array.maybe_map_class(func)?.into_type_descriptor(),
-        })
     }
 }
 /// The type of a java array (`int[]` or `Object[]`).
@@ -317,11 +312,13 @@ impl<'a> JavaType<'a> for ArrayType {
     fn into_type_descriptor(self) -> TypeDescriptor {
         TypeDescriptor::Array(self)
     }
-
-    fn maybe_map_class<F: FnMut(&ReferenceType) -> Option<ReferenceType>>(&self, mut func: F) -> Option<Self> {
-        if let ElementType::Reference(ref reference) = self.0.element_type {
-            if let Some(remapped_reference) = func(reference) {
-                return Some(ArrayType::new(self.0.dimensions, remapped_reference.into_type_descriptor()))
+}
+impl MapClass for ArrayType {
+    #[inline]
+    fn maybe_transform_class<T: TypeTransformer>(&self, transformer: T) -> Option<Self> {
+        if let ElementType::Reference(ref reference_type) = self.0.element_type {
+            if let Some(transformed_reference_type) = transformer.maybe_remap_class(reference_type) {
+                return Some(ArrayType::new(self.0.dimensions, transformed_reference_type))
             }
         }
         None
@@ -399,6 +396,12 @@ impl ReferenceType {
         self.split_name().1
     }
 }
+impl MapClass for ReferenceType {
+    #[inline]
+    fn maybe_transform_class<T: TypeTransformer>(&self, transformer: T) -> Option<Self> {
+        transformer.maybe_remap_class(self)
+    }
+}
 impl SimpleParse for ReferenceType {
     fn parse(parser: &mut SimpleParser) -> Result<Self, SimpleParseError> {
         let start = parser.current_index();
@@ -447,11 +450,6 @@ impl<'a> JavaType<'a> for ReferenceType {
     #[inline]
     fn into_type_descriptor(self) -> TypeDescriptor {
         TypeDescriptor::Reference(self)
-    }
-
-    #[inline]
-    fn maybe_map_class<F: FnMut(&ReferenceType) -> Option<ReferenceType>>(&self, mut func: F) -> Option<Self> {
-        func(self)
     }
 }
 

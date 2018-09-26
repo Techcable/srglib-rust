@@ -4,7 +4,7 @@ use super::prelude::*;
 
 pub mod simple;
 pub mod frozen;
-mod transformer;
+pub(crate) mod transformer;
 
 pub use self::simple::SimpleMappings;
 pub use self::frozen::FrozenMappings;
@@ -23,12 +23,12 @@ macro_rules! chain {
 }
 
 /// A mapping from one set of source names to another
-pub trait Mappings: Default + ::std::fmt::Debug {
+pub trait Mappings: Default + ::std::fmt::Debug + transformer::TypeTransformer {
     /// Get the remapped class name
     fn get_remapped_class(&self, original: &ReferenceType) -> Option<&ReferenceType>;
     #[inline]
     fn remap_type(&self, original: &TypeDescriptor) -> TypeDescriptor {
-        original.map_class(|original| self.get_remapped_class(original).cloned())
+        original.transform_class(self)
     }
     #[inline]
     fn remap_class(&self, original: &ReferenceType) -> ReferenceType {
@@ -47,7 +47,7 @@ pub trait Mappings: Default + ::std::fmt::Debug {
     #[inline]
     fn remap_field(&self, original: &FieldData) -> FieldData {
         self.get_remapped_field(original).map(Cow::into_owned).unwrap_or_else(|| {
-            original.map_class(|t| self.get_remapped_class(t).cloned())
+            original.transform_class(self)
         })
     }
     /// Get the remapped method data, or `None` if the field doesn't exist
@@ -59,7 +59,7 @@ pub trait Mappings: Default + ::std::fmt::Debug {
     #[inline]
     fn remap_method(&self, original: &MethodData) -> MethodData {
         self.get_remapped_method(original).map(Cow::into_owned).unwrap_or_else(|| {
-            original.map_class(|t| self.get_remapped_class(t).cloned())
+            original.transform_class(self)
         })
     }
     fn frozen(&self) -> FrozenMappings;
@@ -125,7 +125,7 @@ pub trait IterableMappings<'a>: Mappings {
         where F: Fn(&ReferenceType) -> Option<ReferenceType> {
         self::transformer::transform(
             self,
-            self::transformer::TypeTransformer(func)
+            self::transformer::FuncTypeTransformer(func)
         )
     }
     #[inline]
