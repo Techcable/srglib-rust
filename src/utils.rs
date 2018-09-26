@@ -1,4 +1,60 @@
-pub type FnvIndexMap<K, V> = ::indexmap::IndexMap<K, V, ::fnv::FnvBuildHasher>;
+use std::hash::{Hash, BuildHasher};
+use std::collections::hash_map::RandomState;
+use std::ops::Deref;
+
+use indexmap::{IndexMap, map::Entry};
+
+pub type FnvIndexMap<K, V> = IndexMap<K, V, ::fnv::FnvBuildHasher>;
+pub type FnvLruCache<K, V> = LruCache<K, V, ::fnv::FnvBuildHasher>;
+
+#[derive(Clone, Debug)]
+pub struct LruCache<K: Eq + Hash, V, S: BuildHasher = RandomState> {
+    capacity: usize,
+    map: IndexMap<K, V, S>
+}
+impl<K: Eq + Hash, V, S: BuildHasher + Default> LruCache<K, V, S> {
+    #[inline]
+    pub fn new(capacity: usize) -> LruCache<K, V, S> {
+        LruCache { capacity, map: IndexMap::with_capacity_and_hasher(capacity, Default::default()) }
+    }
+    fn cleanup(&mut self) {
+        assert!(self.map.len() >= self.capacity);
+        let needed_removed = self.map.len() - self.capacity;
+        let mut index = 0;
+        self.map.retain(|_, _| {
+            let should_remove = index < needed_removed;
+            index += 1;
+            should_remove
+        });
+        assert!(self.map.len() <= self.capacity);
+    }
+    pub fn insert(&mut self, key: K, value: V) -> Option<V> {
+        let (old, cleanup) = match self.map.entry(key) {
+            Entry::Occupied(mut entry) => (Some(entry.insert(value)), false),
+            Entry::Vacant(entry) => {
+                entry.insert(value);
+                (None, true)
+            }
+        };
+        if cleanup && self.map.len() >= self.capacity {
+            self.cleanup()
+        }
+        old
+    }
+    #[inline]
+    pub fn get_or_insert_with<F: FnOnce() -> V>(&mut self, key: K, func: F) -> &V {
+        self.map.entry(key).or_insert_with(func)
+    }
+}
+impl<K: Eq + Hash, V, S: BuildHasher> Deref for LruCache<K, V, S> {
+    type Target = IndexMap<K, V, S>;
+
+    #[inline(always)]
+    fn deref(&self) -> &IndexMap<K, V, S> {
+        &self.map
+    }
+}
+
 
 pub struct SimpleParser<'a> {
     text: &'a str,
