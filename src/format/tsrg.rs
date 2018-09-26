@@ -1,11 +1,11 @@
 use std::io::{self, Write};
 
-use indexmap::IndexMap;
 use itertools::Itertools;
 
-use crate::utils::{SimpleParser, SimpleParseError};
+use crate::utils::{SimpleParser, SimpleParseError, FnvIndexMap};
 use crate::prelude::*;
 use super::{MappingsFormat, MappingsLineProcessor};
+
 
 pub struct TabSrgMappingsFormat;
 impl MappingsFormat for TabSrgMappingsFormat {
@@ -122,9 +122,9 @@ struct ClassData {
     methods: Vec<(MethodData, MethodData)>
 }
 impl ClassData {
-    fn from_mappings<'a, T: IterableMappings<'a>>(mappings: &'a T) -> IndexMap<ReferenceType, ClassData> {
-        let mut classes: IndexMap<ReferenceType, ClassData> = IndexMap::with_capacity(
-            mappings.original_classes().size_hint().1.unwrap_or(0));
+    fn from_mappings<'a, T: IterableMappings<'a>>(mappings: &'a T) -> FnvIndexMap<ReferenceType, ClassData> {
+        let mut classes: FnvIndexMap<ReferenceType, ClassData> = FnvIndexMap::with_capacity_and_hasher(
+            mappings.original_classes().size_hint().1.unwrap_or(0), Default::default());
         for (declaring_type, renamed_type) in mappings.classes() {
             let data = classes.entry(declaring_type.clone())
                 .or_insert_with(Default::default);

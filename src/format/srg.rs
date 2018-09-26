@@ -1,8 +1,6 @@
 use std::io::{self, Write};
 use std::borrow::Borrow;
 
-use indexmap::IndexMap;
-
 use crate::prelude::*;
 use super::{MappingsLineProcessor, MappingsFormat, MappingsParseError};
 use crate::utils::*;
@@ -39,7 +37,7 @@ impl MappingsFormat for SrgMappingsFormat {
 #[derive(Default)]
 pub struct SrgLineProcessor {
     result: SimpleMappings,
-    packages: IndexMap<String, String>
+    packages: FnvIndexMap<String, String>
 }
 impl SrgLineProcessor {
     fn parse_line(&mut self, parser: &mut SimpleParser) -> Result<(), SimpleParseError> {

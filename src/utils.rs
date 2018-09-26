@@ -1,3 +1,5 @@
+pub type FnvIndexMap<K, V> = ::indexmap::IndexMap<K, V, ::fnv::FnvBuildHasher>;
+
 pub struct SimpleParser<'a> {
     text: &'a str,
     remaining: &'a str

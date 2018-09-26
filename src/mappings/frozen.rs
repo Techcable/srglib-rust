@@ -2,10 +2,11 @@ use std::sync::Arc;
 use std::borrow::Cow;
 use std::fmt::{self, Debug};
 
-use indexmap::{map, IndexMap};
+use indexmap::{map};
 use lazy_static::*;
 use difference::Changeset;
 
+use crate::utils::FnvIndexMap;
 use crate::prelude::*;
 
 #[derive(Clone)]
@@ -29,17 +30,17 @@ impl Debug for FrozenMappings {
 }
 #[derive(Debug, PartialEq,)]
 struct FrozenMappingsInner {
-    classes: IndexMap<ReferenceType, ReferenceType>,
-    methods: IndexMap<MethodData, MethodData>,
-    fields: IndexMap<FieldData, FieldData>
+    classes: FnvIndexMap<ReferenceType, ReferenceType>,
+    methods: FnvIndexMap<MethodData, MethodData>,
+    fields: FnvIndexMap<FieldData, FieldData>
 }
 impl FrozenMappingsInner {
     #[inline]
     fn empty() -> Self {
         FrozenMappingsInner {
-            classes: IndexMap::new(),
-            methods: IndexMap::new(),
-            fields: IndexMap::new(),
+            classes: FnvIndexMap::default(),
+            methods: FnvIndexMap::default(),
+            fields: FnvIndexMap::default(),
         }
     }
 }
@@ -74,7 +75,7 @@ impl FrozenMappings {
         where C: IntoIterator<Item=(ReferenceType, ReferenceType)>,
               F: IntoIterator<Item=(FieldData, String)>,
               M: IntoIterator<Item=(MethodData, String)> {
-        let classes: IndexMap<ReferenceType, ReferenceType> = classes.into_iter().collect();
+        let classes: FnvIndexMap<ReferenceType, ReferenceType> = classes.into_iter().collect();
         let remap_func = |original: &ReferenceType| {
             classes.get(original).cloned()
         };
@@ -93,9 +94,9 @@ impl FrozenMappings {
     /// Create a new FrozenMappings from the specified indexmaps,
     /// without checking that the mappings are consistent.
     fn new_raw(
-        classes: IndexMap<ReferenceType, ReferenceType>,
-        fields: IndexMap<FieldData, FieldData>,
-        methods: IndexMap<MethodData, MethodData>
+        classes: FnvIndexMap<ReferenceType, ReferenceType>,
+        fields: FnvIndexMap<FieldData, FieldData>,
+        methods: FnvIndexMap<MethodData, MethodData>
     ) -> FrozenMappings {
         let primary = FrozenMappingsInner { classes, fields, methods };
         let inverted = FrozenMappingsInner {
@@ -114,9 +115,9 @@ impl FrozenMappings {
     /// Chain the specified mappings onto this one,
     /// using the renamed result of each mapping as the original for the next
     pub fn chain<T: for<'a> IterableMappings<'a> >(&self, mapping: T) -> FrozenMappings {
-        let mut classes = IndexMap::new();
-        let mut fields = IndexMap::new();
-        let mut methods = IndexMap::new();
+        let mut classes = FnvIndexMap::default();
+        let mut fields = FnvIndexMap::default();
+        let mut methods = FnvIndexMap::default();
         let inverted = self.inverted();
 
         // If we encounter a new name, add it to the set

@@ -1,15 +1,16 @@
 use std::borrow::Cow;
 use std::iter;
 
-use indexmap::{map, IndexMap};
+use indexmap::{map};
 
 use crate::prelude::*;
+use crate::utils::FnvIndexMap;
 
 #[derive(Clone, Debug, Default)]
 pub struct SimpleMappings {
-    pub(super) classes: IndexMap<ReferenceType, ReferenceType>,
-    pub(super) method_names: IndexMap<MethodData, String>,
-    pub(super) field_names: IndexMap<FieldData, String>
+    pub(super) classes: FnvIndexMap<ReferenceType, ReferenceType>,
+    pub(super) method_names: FnvIndexMap<MethodData, String>,
+    pub(super) field_names: FnvIndexMap<FieldData, String>
 }
 impl Mappings for SimpleMappings {
     #[inline]
