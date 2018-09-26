@@ -1,5 +1,5 @@
-use std::hash::Hash;
-use std::hash::Hasher;
+use std::hash::{Hash, Hasher};
+use std::sync::Arc;
 
 use crate::utils::*;
 use super::prelude::*;
@@ -92,7 +92,9 @@ impl<'a> From<&'a FieldData> for FieldData {
 }
 
 #[derive(Clone, Debug)]
-pub struct MethodSignature {
+pub struct MethodSignature(Arc<MethodSignatureInner>);
+#[derive(Debug)]
+struct MethodSignatureInner {
     descriptor: String,
     return_type: TypeDescriptor,
     parameter_types: Vec<TypeDescriptor>
@@ -106,7 +108,11 @@ impl MethodSignature {
         }
         descriptor.push(')');
         descriptor.push_str(return_type.descriptor());
-        MethodSignature { descriptor, return_type, parameter_types }
+        Self::from_raw(descriptor, return_type, parameter_types)
+    }
+    #[inline]
+    fn from_raw(descriptor: String, return_type: TypeDescriptor, parameter_types: Vec<TypeDescriptor>) -> Self {
+        MethodSignature(Arc::new(MethodSignatureInner { descriptor, return_type, parameter_types }))
     }
     #[inline]
     pub fn from_descriptor(s: &str) -> MethodSignature {
@@ -118,21 +124,21 @@ impl MethodSignature {
     }
     #[inline]
     pub fn descriptor(&self) -> &str {
-        &self.descriptor
+        &self.0.descriptor
     }
     #[inline]
     pub fn return_type(&self) -> &TypeDescriptor {
-        &self.return_type
+        &self.0.return_type
     }
     #[inline]
     pub fn parameter_types(&self) -> &[TypeDescriptor] {
-        &self.parameter_types
+        &self.0.parameter_types
     }
     pub fn map_class<F>(&self, mut func: F) -> MethodSignature
         where F: FnMut(&ReferenceType) -> Option<ReferenceType> {
         MethodSignature::new(
-            self.return_type.map_class(|c| func(c)),
-            self.parameter_types.iter()
+            self.0.return_type.map_class(|c| func(c)),
+            self.0.parameter_types.iter()
                 .map(|t| t.map_class(|c| func(c))).collect()
         )
     }
@@ -148,7 +154,7 @@ impl SimpleParse for MethodSignature {
         parser.expect(')')?;
         let return_type = parser.parse()?;
         let descriptor = String::from(&parser.original()[index..parser.current_index()]);
-        Ok(MethodSignature { descriptor, return_type, parameter_types })
+        Ok(Self::from_raw(descriptor, return_type, parameter_types))
     }
 }
 impl Hash for MethodSignature {
