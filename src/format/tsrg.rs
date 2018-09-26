@@ -7,8 +7,8 @@ use crate::utils::{SimpleParser, SimpleParseError};
 use crate::prelude::*;
 use super::{MappingsFormat, MappingsLineProcessor};
 
-pub struct TabSrgFormat;
-impl MappingsFormat for TabSrgFormat {
+pub struct TabSrgMappingsFormat;
+impl MappingsFormat for TabSrgMappingsFormat {
     type Processor = TabSrgLineProcessor;
 
     fn write<'a, T: IterableMappings<'a>, W: Write>(mappings: &'a T, mut writer: W) -> io::Result<()> {
@@ -180,11 +180,11 @@ b net/minecraft/crash/CrashReport
 
     #[test]
     fn parse() {
-        TabSrgFormat::parse_text(TEST_TEXT).unwrap().assert_equal(&expected_mappings())
+        TabSrgMappingsFormat::parse_text(TEST_TEXT).unwrap().assert_equal(&expected_mappings())
     }
     #[test]
     fn serialize() {
-        let serialized = TabSrgFormat::write_string(&expected_mappings());
+        let serialized = TabSrgMappingsFormat::write_string(&expected_mappings());
         if serialized != TEST_TEXT {
             let changelog = ::difference::Changeset::new(TEST_TEXT, &serialized, " ");
             panic!("serialized != TEST_TEXT:\n{}", changelog);
