@@ -1,5 +1,6 @@
 extern crate indexmap;
 extern crate difference;
+extern crate itertools;
 
 pub mod types;
 pub mod descriptor;

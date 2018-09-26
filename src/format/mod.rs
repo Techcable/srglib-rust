@@ -6,6 +6,7 @@ use crate::prelude::*;
 
 pub mod srg;
 pub mod csrg;
+pub mod tsrg;
 
 #[derive(Debug, Fail)]
 pub enum MappingsParseError {

@@ -109,6 +109,14 @@ impl MethodSignature {
         MethodSignature { descriptor, return_type, parameter_types }
     }
     #[inline]
+    pub fn from_descriptor(s: &str) -> MethodSignature {
+        Self::parse_descriptor(s).unwrap_or_else(|| panic!("Invalid descriptor: {:?}", s))
+    }
+    #[inline]
+    pub fn parse_descriptor(s: &str) -> Option<Self> {
+        MethodSignature::parse_text(s).ok()
+    }
+    #[inline]
     pub fn descriptor(&self) -> &str {
         &self.descriptor
     }
